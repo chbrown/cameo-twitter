@@ -1,0 +1,36 @@
+{
+  "name": "cameo-twitter",
+  "version": "0.0.1",
+  "description": "Twitter archival tooling",
+  "keywords": [],
+  "homepage": "https://github.com/chbrown/cameo-twitter",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/chbrown/cameo-twitter.git"
+  },
+  "bugs": {
+    "email": "Christopher Brown <io@henrian.com>",
+    "url": "http://github.com/chbrown/cameo-twitter/issues"
+  },
+  "license": "MIT",
+  "author": "Christopher Brown <io@henrian.com> (http://henrian.com)",
+  "dependencies": {
+    "async": "*",
+    "loge": "*",
+    "optimist": "*",
+    "pg": "*",
+    "redis": "*",
+    "request": "*",
+    "sqlcmd": "*",
+    "streaming": "*",
+    "twilight": "*",
+    "underscore": "*"
+  },
+  "devDependencies": {
+    "tap": "*"
+  },
+  "bin": {
+    "cameo-twitter": "bin/cameo-twitter.js"
+  },
+  "scripts": {}
+}
