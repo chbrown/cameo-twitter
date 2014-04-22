@@ -4,7 +4,6 @@ CREATE EXTENSION citext;
 
 -- PG data types: http://www.postgresql.org/docs/9.3/static/datatype.html
 
-
 -- CREATE TABLE tasks (
 --   id serial PRIMARY KEY,
 
@@ -20,44 +19,54 @@ CREATE EXTENSION citext;
 CREATE TABLE users (
   -- Twitter docs: 1) Your username cannot be longer than 15 characters, 2) A username can only contain alphanumeric characters (letters A-Z, numbers 0-9) with the exception of underscores, as noted above.
   -- named... CONSTRAINT valid_twitter_username
-  screen_name CITEXT PRIMARY KEY CHECK (screen_name ~* '^[_a-z0-9]{1,15}$'),
-
-  id_str                             TEXT,
-  id                                 BIGINT,
-  statuses_count                     BIGINT,
-  contributors_enabled               BOOLEAN,
-  friends_count                      BIGINT,
-  geo_enabled                        BOOLEAN,
-  description                        TEXT,
-  profile_sidebar_border_color       TEXT,
-  listed_count                       BIGINT,
-  followers_count                    BIGINT,
-  location                           TEXT,
-  profile_background_image_url       TEXT,
+  id                                 BIGINT UNIQUE,
+  id_str                             TEXT UNIQUE,
   name                               TEXT,
-  default_profile_image              BOOLEAN,
-  profile_image_url_https            TEXT,
-  notifications                      BOOLEAN,
-  protected                          BOOLEAN,
-  profile_background_color           TEXT,
-  created_at                         TEXT,
-  default_profile                    BOOLEAN,
+  screen_name                        CITEXT CHECK (screen_name ~* '^[_a-z0-9]{1,15}$') UNIQUE,
+  location                           TEXT,
+  description                        TEXT,
   url                                TEXT,
-  verified                           BOOLEAN,
-  profile_link_color                 TEXT,
-  profile_image_url                  TEXT,
-  profile_use_background_image       BOOLEAN,
+  protected                          BOOLEAN,
+
+  followers_count                    BIGINT,
+  friends_count                      BIGINT,
+  listed_count                       BIGINT,
+  created_at                         TEXT,
   favourites_count                   BIGINT,
-  profile_background_image_url_https TEXT,
-  profile_sidebar_fill_color         TEXT,
-  is_translator                      BOOLEAN,
-  follow_request_sent                BOOLEAN,
-  following                          BOOLEAN,
-  profile_background_tile            BOOLEAN,
-  show_all_inline_media              BOOLEAN,
-  profile_text_color                 TEXT,
+  utc_offset                         INT,
+  time_zone                          TEXT,
+  geo_enabled                        BOOLEAN,
+  verified                           BOOLEAN,
+  statuses_count                     BIGINT,
   lang                               TEXT,
 
+  contributors_enabled               BOOLEAN,
+  is_translator                      BOOLEAN,
+  is_translation_enabled             BOOLEAN,
+
+  profile_background_color           TEXT,
+  profile_background_image_url       TEXT,
+  profile_background_image_url_https TEXT,
+  profile_background_tile            BOOLEAN,
+  profile_image_url                  TEXT,
+  profile_image_url_https            TEXT,
+  profile_banner_url                 TEXT,
+  profile_link_color                 TEXT,
+  profile_sidebar_border_color       TEXT,
+  profile_sidebar_fill_color         TEXT,
+  profile_text_color                 TEXT,
+  profile_use_background_image       BOOLEAN,
+
+  default_profile                    BOOLEAN,
+  default_profile_image              BOOLEAN,
+  following                          BOOLEAN,
+  follow_request_sent                BOOLEAN,
+  notifications                      BOOLEAN,
+
+  -- modified tracks the last-synced date
+  modified TIMESTAMP,
+
+  -- "inserted", to differentiate from "created_at"
   inserted TIMESTAMP NOT NULL DEFAULT current_timestamp
 );
 
@@ -88,7 +97,7 @@ CREATE TABLE edge_events_watched_users (
   active BOOLEAN DEFAULT TRUE NOT NULL,
 
   -- modified: when last crawled
-  modified TIMESTAMP,
+  modified TIMESTAMP DEFAULT 'epoch',
   -- created: default, insertion point
   created TIMESTAMP NOT NULL DEFAULT current_timestamp
 );

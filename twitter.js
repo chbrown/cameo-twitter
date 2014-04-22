@@ -33,3 +33,27 @@ exports.resolveScreenNames = function(screen_names, callback) {
     });
   });
 };
+
+exports.getUsers = function(user_ids, screen_names, callback) {
+  /** Get the user objects for a list of user_ids and/or screen_names.
+  callback: function(Error | null, Array[Object] | null)
+  */
+  user_ids = user_ids || [];
+  screen_names = screen_names || [];
+  twilight.getOAuth('~/.twitter', function(err, oauth) {
+    if (err) return callback(err);
+    request({
+      method: 'POST',
+      url: 'https://api.twitter.com/1.1/users/lookup.json',
+      oauth: oauth,
+      json: true,
+      form: {
+        // apparently Twitter is happy with both
+        user_id: user_ids.join(','),
+        screen_name: screen_names.join(','),
+      }
+    }, function(err, response, body) {
+      callback(err, body);
+    });
+  });
+};

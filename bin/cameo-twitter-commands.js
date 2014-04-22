@@ -33,3 +33,49 @@ exports.add = function(argv) {
     });
   });
 };
+
+var populate = function(callback) {
+  // populate half-filled users in the users table
+  (function loop() {
+    db.Select('users')
+    .where('screen_name IS NULL') // OR id IS NULL
+    .limit(100)
+    .execute(function(err, rows) {
+      if (err) return callback(err);
+
+      if (rows.length) {
+        var user_ids = _.pluck(rows, 'id');
+        logger.debug('Fetching user_ids: %j', user_ids);
+        twitter.getUsers(user_ids, [], function(err, users) {
+          if (err) return callback(err);
+          var now = new Date();
+
+          // users are not necessarily in order
+          async.each(users, function(user, callback) {
+            var fields = _.omit(user, 'id', 'entities', 'status');
+            db.Update('users')
+            .set(fields)
+            .set({modified: now})
+            .where('id = ?', user.id)
+            .execute(callback);
+          }, function(err) {
+            if (err) return callback(err);
+            setImmediate(loop);
+          });
+        });
+      }
+      else {
+        callback();
+      }
+    });
+  })();
+};
+
+exports.populate = function(argv) {
+  populate(function(err) {
+    if (err) throw err;
+
+    logger.info('done');
+    process.exit();
+  });
+};

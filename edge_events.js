@@ -7,6 +7,24 @@ var twilight = require('twilight');
 
 var db = require('./db');
 
+function HTTPError(incoming_message, body) {
+  Error.call(this);
+  Error.captureStackTrace(this, arguments.callee);
+  this.name = 'HTTPError';
+  this.message = 'HTTP Error ' + incoming_message.statusCode + '.';
+  this.incoming_message = incoming_message;
+  this.body = body;
+}
+
+function ThrashError() {
+  // raise to signal a loop to slow down, say, if you aren't getting any of the results you want
+  Error.call(this);
+  Error.captureStackTrace(this, arguments.callee);
+  this.name = 'ThrashError';
+  this.message = 'Thrash error.';
+}
+
+
 var replayHistory = function(rows, key) {
   var users = {};
   rows.forEach(function(row) {
@@ -40,6 +58,10 @@ var sync_watched_user = function(user_id, started, ended, callback) {
         oauth: payload.oauth,
       }, function(err, response, body) {
         if (err) return callback(err);
+
+        if (response.statusCode != 200) {
+          return callback(new HTTPError(response, body));
+        }
         callback(null, body.ids);
       });
     }],
@@ -49,6 +71,10 @@ var sync_watched_user = function(user_id, started, ended, callback) {
         oauth: payload.oauth,
       }, function(err, response, body) {
         if (err) return callback(err);
+
+        if (response.statusCode != 200) {
+          return callback(new HTTPError(response, body));
+        }
         callback(null, body.ids);
       });
     }],
@@ -102,57 +128,89 @@ var sync_watched_user = function(user_id, started, ended, callback) {
   });
 };
 
-var watched_users_loop = function(period, callback) {
-  // The update with join is a way to lock the desired result, update it, and join on the pre-update values
-  // http://stackoverflow.com/questions/7923237/return-pre-update-column-values-using-sql-only-postgresql-version
-  // http://stackoverflow.com/questions/11532550/atomic-update-select-in-postgres
+var sync_next_watched_user = function(period, callback) {
+  /**
+  Get the next user that has been synced recently enough.
+  */
   var watched_users_select_sql = [
     'UPDATE edge_events_watched_users AS t1 SET modified = NOW()',
     'FROM (SELECT id, modified AS old_modified FROM edge_events_watched_users WHERE active IS TRUE AND modified < $1 LIMIT 1 FOR UPDATE) AS t2',
     'WHERE t1.id = t2.id',
     'RETURNING *',
   ].join(' ');
-  (function loop() {
-    logger.debug('Entering watched_users_loop');
-    var now = new Date();
-    var cutoff = new Date(now - (period * 1000));
-    // lock, pop off, and update the next one
-    db.query(watched_users_select_sql, [cutoff], function(err, rows) {
-      if (err) return callback(err);
 
-      var row = rows[0];
-      if (row === undefined) {
-        db.Select('edge_events_watched_users')
-        .orderBy('modified ASC')
-        .limit(1)
-        .execute(function(err, rows) {
-          if (err) return callback(err);
+  var now = new Date();
+  var cutoff = new Date(now - (period * 1000));
+  // lock, pop off, and update the next one
+  db.query(watched_users_select_sql, [cutoff], function(err, rows) {
+    if (err) return callback(err);
+    if (rows.length === 0) return callback(new ThrashError());
 
-          var next_modified = rows[0].modified; // the oldest modified date in the bunch
-          var interval = next_modified - cutoff;
-          logger.warn('Oldest task is %s, waiting %ds.', next_modified, interval / 1000 | 0);
-          // add a little extra time so that we don't race around during the 0 second
-          setTimeout(loop, interval + 1000);
-        });
+    var row = rows[0];
+    sync_watched_user(row.user_id, row.old_modified, now, function(err) {
+      if (err) {
+        logger.error('sync_watched_user error', err.message);
+        if (err instanceof HTTPError && err.incoming_message.statusCode == 401) {
+          logger.error('deactivating user "%s" due to 401 HTTP response', row.user_id);
+          db.Update('edge_events_watched_users')
+          .set({active: false})
+          .where('id = ?', row.id)
+          .execute(callback);
+        }
+        else {
+          logger.error('setting modified back to original value for user "%s"', row.user_id);
+          db.Update('edge_events_watched_users')
+          .set({modified: row.old_modified})
+          .where('id = ?', row.id)
+          .execute(callback);
+        }
       }
       else {
-        sync_watched_user(row.user_id, row.old_modified, now, function(err) {
-          if (err) {
-            logger.error('sync_watched_user error; setting modified back to original value', err);
+        callback();
+      }
+    });
+  });
+};
 
-            db.Update('edge_events_watched_users')
-            .set('modified', row.old_modified)
-            .where('id = ?', row.id)
-            .execute(function(err) {
-              if (err) return callback(err);
+var watched_users_loop = function(period, callback) {
+  /** The loop container for working the 'edge_events_watched_users' table.
 
-              setImmediate(loop);
-            });
-          }
-          else {
-            setImmediate(loop);
-          }
-        });
+  period: Number
+    Seconds between polling for updates.
+  callback: function(Error)
+    Only called on fatal error.
+  */
+  // The update with join is a way to lock the desired result, update it, and join on the pre-update values
+  // http://stackoverflow.com/questions/7923237/return-pre-update-column-values-using-sql-only-postgresql-version
+  // http://stackoverflow.com/questions/11532550/atomic-update-select-in-postgres
+  (function loop() {
+    // logger.debug('Entering watched_users_loop');
+    sync_next_watched_user(period, function(err) {
+      if (err) {
+        if (err.name == 'ThrashError') {
+          db.Select('edge_events_watched_users')
+          .orderBy('modified ASC')
+          .where('active IS TRUE')
+          .limit(1)
+          .execute(function(err, rows) {
+            if (err) return callback(err);
+
+            var next_modified = rows[0].modified; // the oldest modified date in the bunch
+            var next_age = new Date() - next_modified;
+            // add a little extra time ("slack") so that we don't race around during the 0 second.
+            // next_modified - cutoff == (period * 1000) - next_age
+            var interval = ((period * 1000) - next_age) + 10000;
+            logger.warn('Oldest task was %ds ago, waiting %ds.', next_age / 1000 | 0, interval / 1000 | 0);
+            setTimeout(loop, interval);
+          });
+        }
+        else {
+          // fatal error
+          callback(err);
+        }
+      }
+      else {
+        setImmediate(loop);
       }
     });
   })();
@@ -184,6 +242,10 @@ exports.startCluster = function(forks, period) {
     });
   }
 };
+
+// var disableUser = exports.disableUser = function(user_id, callback) {
+//   db.Update('edge_events_watched_users').set({active: false}).execute(callback);
+// };
 
 exports.addUser = function(user_id, callback) {
   // check if that user already exists
