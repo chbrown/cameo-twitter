@@ -34,8 +34,15 @@ module.exports = function(workFunction, forks) {
   }
   else {
     workFunction(function(err) {
-      if (err) throw err;
-      process.exit();
+      if (err) {
+        logger.error('fork stopped work due to error');
+        logger.error(err.stack);
+        logger.debug(err);
+      }
+      else {
+        logger.warn('fork stopped work without error');
+      }
+      process.exit(err ? 1 : 0);
     });
   }
 };

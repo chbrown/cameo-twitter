@@ -92,31 +92,19 @@ exports['statuses-add'] = function(argv) {
   // var user_key = argv.field == 'user_id' ? 'id_str' : 'screen_name';
   getLines(args, function(err, lines) {
     if (err) throw err;
-
     // just assume they're all screen names
+    logger.info('adding %d screen_names', lines.length);
     users.add_screen_names(lines, function(err) {
       if (err) throw err;
       users.sync_missing(function(err) {
         if (err) throw err;
-
-        db.Select('users')
-        .whereIn('screen_name', screen_names)
-        .where('missing IS FALSE')
-        .execute(function(err, users) {
+        // statuses.add_screen_names requires that the screen_names exist in the 'users' table
+        statuses.add_screen_names(lines, function(err) {
           if (err) throw err;
-
-          async.each(users, function(user, callback) {
-            db.Insert('statuses_watched_users')
-            .set({user_id: user.id_str})
-            .execute(callback);
-          }, callback);
+          logger.info('statuses-add done');
+          process.exit();
         });
       });
-    })
-
-    statuses.addScreenNames(lines, function(err) {
-      if (err) throw err;
-      logger.info('done');
     });
   });
 };
@@ -128,7 +116,7 @@ exports.populate = function(argv) {
       process.exit(1);
     }
 
-    logger.info('done');
+    logger.info('populate done');
     process.exit();
   });
 };

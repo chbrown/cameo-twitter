@@ -44,9 +44,9 @@ var getStatuses = function(oauth, user_id, max_id, callback) {
 };
 
 function addStatus(status, callback) {
-  var fields = _.omit(status, 'user',
-    'in_reply_to_status_id', 'in_reply_to_user_id',
-    'geo', 'retweeted_status', 'entities');
+  var fields = _.omit(status,
+    'id', 'in_reply_to_status_id', 'in_reply_to_user_id',
+    'user', 'geo', 'retweeted_status', 'entities');
   fields.user_id_str = status.user.id_str;
   fields.user_screen_name = status.user.screen_name;
 
@@ -63,7 +63,7 @@ var next = function(callback) {
   /**
   Get the next user that hasn't been synced recently enough.
 
-  Or for now, just
+  Or for now, just fill in the backlog.
   */
 
   var select_sql = [
@@ -79,11 +79,13 @@ var next = function(callback) {
     if (err) return callback(err);
     if (rows.length === 0) return callback(new errors.ThrashError());
     var user_id = rows[0].user_id;
+    logger.info('filling in backlog for user "%s"', user_id);
 
+    // get the oldest status (the one with the least created_at date)
     db.Select('statuses')
     .add('id_str')
-    .where('user_id = ?', user_id)
-    .orderBy('id ASC')
+    .where('user_id_str = ?', user_id)
+    .orderBy('created_at ASC')
     .limit(1)
     .execute(function(err, statuses_rows) {
       if (err) return callback(err);
@@ -96,10 +98,13 @@ var next = function(callback) {
         var ntweets = 0;
         (function loop() {
           var one = new bigdecimal.BigInteger('1');
-          var max_id = last_status_id_str ? new bigdecimal.BigInteger(last_status_id_str).subtract(one).toString() : undefined;
+          var max_id;
+          if (last_status_id_str) {
+            max_id = new bigdecimal.BigInteger(last_status_id_str).subtract(one).toString();
+          }
           getStatuses(oauth, user_id, max_id, function(err, statuses) {
             if (err) return callback(err);
-            logger.info('found batch of %d statuses', statuses.length, max_id);
+            logger.info('found batch of %d statuses (max_id = %s)', statuses.length, max_id);
 
             if (statuses.length) {
               ntweets += statuses.length;
@@ -138,4 +143,49 @@ exports.loop = function(callback) {
       setImmediate(loop);
     });
   })();
+};
+
+exports.add_screen_names = function(screen_names, callback) {
+  /** Resolve the given screen_names in the users table and add them to the
+  statuses_watched_users table.
+
+  callback: function(Error | null, )
+  */
+  async.map(screen_names, function(screen_name, callback) {
+    db.Select('users')
+    .where('screen_name = ?', screen_name)
+    .execute(function(err, users) {
+      if (err) return callback(err);
+
+      var user = users[0];
+      if (user === undefined) {
+        logger.error('Screen name "%s" not found in "users" table', screen_name);
+        return new Error('Screen name not found');
+      }
+
+      if (!user.missing) {
+        db.Insert('statuses_watched_users')
+        .set({user_id: user.id_str})
+        .execute(function(err) {
+          // 23505: unique violation, ignore
+          if (err) {
+            if (err.code == '23505') return callback(null, 'duplicate');
+            return callback(err);
+          }
+          callback(null, 'inserted');
+        });
+      }
+      else {
+        callback(null, 'missing');
+      }
+
+    });
+  }, function(err, results) {
+    if (err) return callback(err);
+    var counts = _.groupBy(results);
+    logger.info('inserted %d users; %d duplicates, %d missing',
+      (counts.inserted || []).length, (counts.duplicate || []).length, (counts.missing || []).length);
+
+    callback();
+  });
 };
