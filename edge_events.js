@@ -6,24 +6,7 @@ var _ = require('underscore');
 var twilight = require('twilight');
 
 var db = require('./db');
-
-function HTTPError(incoming_message, body) {
-  Error.call(this);
-  Error.captureStackTrace(this, arguments.callee);
-  this.name = 'HTTPError';
-  this.message = 'HTTP Error ' + incoming_message.statusCode + '.';
-  this.incoming_message = incoming_message;
-  this.body = body;
-}
-
-function ThrashError() {
-  // raise to signal a loop to slow down, say, if you aren't getting any of the results you want
-  Error.call(this);
-  Error.captureStackTrace(this, arguments.callee);
-  this.name = 'ThrashError';
-  this.message = 'Thrash error.';
-}
-
+var errors = require('./errors');
 
 var replayHistory = function(rows, key) {
   var users = {};
@@ -60,7 +43,7 @@ var sync_watched_user = function(user_id, started, ended, callback) {
         if (err) return callback(err);
 
         if (response.statusCode != 200) {
-          return callback(new HTTPError(response, body));
+          return callback(new errors.HTTPError(response, body));
         }
         callback(null, body.ids);
       });
@@ -73,7 +56,7 @@ var sync_watched_user = function(user_id, started, ended, callback) {
         if (err) return callback(err);
 
         if (response.statusCode != 200) {
-          return callback(new HTTPError(response, body));
+          return callback(new errors.HTTPError(response, body));
         }
         callback(null, body.ids);
       });
@@ -144,13 +127,13 @@ var sync_next_watched_user = function(period, callback) {
   // lock, pop off, and update the next one
   db.query(watched_users_select_sql, [cutoff], function(err, rows) {
     if (err) return callback(err);
-    if (rows.length === 0) return callback(new ThrashError());
+    if (rows.length === 0) return callback(new errors.ThrashError());
 
     var row = rows[0];
     sync_watched_user(row.user_id, row.old_modified, now, function(err) {
       if (err) {
         logger.error('sync_watched_user error', err.message);
-        if (err instanceof HTTPError && err.incoming_message.statusCode == 401) {
+        if (err instanceof errors.HTTPError && err.incoming_message.statusCode == 401) {
           logger.error('deactivating user "%s" due to 401 HTTP response', row.user_id);
           db.Update('edge_events_watched_users')
           .set({active: false})
@@ -172,7 +155,28 @@ var sync_next_watched_user = function(period, callback) {
   });
 };
 
-var watched_users_loop = function(period, callback) {
+exports.addUser = function(user_id, callback) {
+  // check if that user already exists
+  db.Insert('edge_events_watched_users')
+  .set({
+    user_id: user_id,
+    active: true,
+    modified: new Date(0),
+  })
+  .execute(function(err) {
+    if (err) {
+      // 23505: unique violation, ignore
+      if (err.code != '23505') {
+        // console.dir(err);
+        return callback(err);
+      }
+    }
+
+    callback();
+  });
+};
+
+exports.loop = function(period, callback) {
   /** The loop container for working the 'edge_events_watched_users' table.
 
   period: Number
@@ -187,7 +191,7 @@ var watched_users_loop = function(period, callback) {
     // logger.debug('Entering watched_users_loop');
     sync_next_watched_user(period, function(err) {
       if (err) {
-        if (err.name == 'ThrashError') {
+        if (err instanceof errors.ThrashError) {
           db.Select('edge_events_watched_users')
           .orderBy('modified ASC')
           .where('active IS TRUE')
@@ -214,56 +218,4 @@ var watched_users_loop = function(period, callback) {
       }
     });
   })();
-};
-
-exports.startCluster = function(forks, period) {
-  /** watched_users_cluster */
-  var cluster = require('cluster');
-  if (cluster.isMaster) {
-    logger.info('Starting cluster with %d forks', forks);
-    cluster.on('exit', function(worker, code, signal) {
-      logger.error('cluster: worker exit %d (pid: %d)', worker.id, worker.process.pid, code, signal);
-      cluster.fork();
-    });
-    // cluster.on('fork', function(worker) {
-    //   logger.info('cluster: worker fork %d (pid: %d)', worker.id, worker.process.pid);
-    // });
-
-    // fork workers
-    for (var i = 0; i < forks; i++) {
-      cluster.fork();
-    }
-  }
-  else {
-    watched_users_loop(period, function(err) {
-      // normally won't ever callback
-      logger.error('edge_events_watched_users_loop raised error', err);
-      process.exit(1);
-    });
-  }
-};
-
-// var disableUser = exports.disableUser = function(user_id, callback) {
-//   db.Update('edge_events_watched_users').set({active: false}).execute(callback);
-// };
-
-exports.addUser = function(user_id, callback) {
-  // check if that user already exists
-  db.Insert('edge_events_watched_users')
-  .set({
-    user_id: user_id,
-    active: true,
-    modified: new Date(0),
-  })
-  .execute(function(err) {
-    if (err) {
-      // 23505: unique violation, ignore
-      if (err.code != '23505') {
-        // console.dir(err);
-        return callback(err);
-      }
-    }
-
-    callback();
-  });
 };

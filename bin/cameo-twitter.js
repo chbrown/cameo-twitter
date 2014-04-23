@@ -8,9 +8,11 @@ var optimist = require('optimist')
     'Usage: $0 <command> [<args>]',
     '',
     'commands:',
-    '  install   Create the database and execute the schema, if needed',
-    '  work      Start the queue worker in cluster mode',
-    '  add       Add user_ids / screen_names from file, argument, or STDIN',
+    '  install        Create the database and execute the schema, if needed',
+    '  edges-work     Start the edge history worker in cluster mode',
+    '  edges-add      Add user_ids / screen_names from file, argument, or STDIN',
+    '  statuses-work  Start the user status worker in cluster mode',
+    '  statuses-add   Add user ids / screen_names from file, argument, or STDIN',
     '',
   ].join('\n'))
   .describe({
@@ -23,7 +25,7 @@ var optimist = require('optimist')
   .boolean(['help', 'verbose'])
   .default({
     forks: os.cpus().length,
-    period: 24*60*60, // seconds_per_day
+    period: 3*60*60, // every three hours; 24*60*60 = seconds_per_day
   });
 
 var argv = optimist.argv;
