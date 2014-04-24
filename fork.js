@@ -36,7 +36,7 @@ module.exports = function(workFunction, forks) {
     workFunction(function(err) {
       if (err) {
         logger.error('fork stopped work due to error');
-        logger.error(err.stack);
+        logger.error(err.message, err.stack);
         logger.debug(err);
       }
       else {

@@ -4,7 +4,7 @@ var request = require('request');
 var logger = require('loge');
 var _ = require('underscore');
 var twilight = require('twilight');
-var bigdecimal = require('bigdecimal');
+var BigNumber = require('bignumber.js');
 
 var db = require('./db');
 var errors = require('./errors');
@@ -46,7 +46,7 @@ var getStatuses = function(oauth, user_id, max_id, callback) {
 function addStatus(status, callback) {
   var fields = _.omit(status,
     'id', 'in_reply_to_status_id', 'in_reply_to_user_id',
-    'user', 'geo', 'retweeted_status', 'entities');
+    'user', 'geo', 'retweeted_status');
   fields.user_id_str = status.user.id_str;
   fields.user_screen_name = status.user.screen_name;
 
@@ -66,18 +66,26 @@ var next = function(callback) {
   Or for now, just fill in the backlog.
   */
 
+  // is there a better way without locking?
+  // http://www.postgresql.org/docs/9.3/static/sql-lock.html
+  // http://www.postgresql.org/docs/9.3/static/explicit-locking.html
+  // maybe with advisory locks? http://www.postgresql.org/docs/9.1/static/functions-admin.html#FUNCTIONS-ADVISORY-LOCKS
+  // http://www.postgresql.org/docs/9.1/static/runtime-config-locks.html
   var select_sql = [
+    'BEGIN; LOCK TABLE statuses_watched_users IN ACCESS EXCLUSIVE MODE;',
     'UPDATE statuses_watched_users AS t1 SET modified = NOW()',
     'FROM (SELECT id, modified AS old_modified FROM statuses_watched_users',
-    '  WHERE backlog_exhausted IS FALSE AND active IS TRUE ORDER BY modified ASC LIMIT 1 FOR UPDATE) AS t2',
+    '  WHERE backlog_exhausted IS FALSE AND active IS TRUE ORDER BY modified ASC LIMIT 1) AS t2',
     'WHERE t1.id = t2.id',
-    'RETURNING *',
+    'RETURNING *;',
+    'COMMIT;',
   ].join(' ');
-
 
   db.query(select_sql, [], function(err, rows) {
     if (err) return callback(err);
     if (rows.length === 0) return callback(new errors.ThrashError());
+
+    // logger.info('rows', rows);
     var user_id = rows[0].user_id;
     logger.info('filling in backlog for user "%s"', user_id);
 
@@ -97,10 +105,9 @@ var next = function(callback) {
 
         var ntweets = 0;
         (function loop() {
-          var one = new bigdecimal.BigInteger('1');
           var max_id;
           if (last_status_id_str) {
-            max_id = new bigdecimal.BigInteger(last_status_id_str).subtract(one).toString();
+            max_id = new BigNumber(last_status_id_str).minus(1).toString();
           }
           getStatuses(oauth, user_id, max_id, function(err, statuses) {
             if (err) return callback(err);

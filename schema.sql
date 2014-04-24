@@ -85,7 +85,7 @@ CREATE TABLE statuses (
     retweeted_status_id_str TEXT,
   retweet_count             INT,
   favorite_count            INT,
-  -- entities json,
+  entities                  JSON,
   favorited                 BOOLEAN,
   retweeted                 BOOLEAN,
   possibly_sensitive        BOOLEAN,

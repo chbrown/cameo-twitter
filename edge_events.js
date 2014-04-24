@@ -115,6 +115,9 @@ var sync_next_watched_user = function(period, callback) {
   /**
   Get the next user that has been synced recently enough.
   */
+  // The update with join is a way to lock the desired result, update it, and join on the pre-update values
+  // http://stackoverflow.com/questions/7923237/return-pre-update-column-values-using-sql-only-postgresql-version
+  // http://stackoverflow.com/questions/11532550/atomic-update-select-in-postgres
   var watched_users_select_sql = [
     'UPDATE edge_events_watched_users AS t1 SET modified = NOW()',
     'FROM (SELECT id, modified AS old_modified FROM edge_events_watched_users WHERE active IS TRUE AND modified < $1 LIMIT 1 FOR UPDATE) AS t2',
@@ -184,9 +187,6 @@ exports.loop = function(period, callback) {
   callback: function(Error)
     Only called on fatal error.
   */
-  // The update with join is a way to lock the desired result, update it, and join on the pre-update values
-  // http://stackoverflow.com/questions/7923237/return-pre-update-column-values-using-sql-only-postgresql-version
-  // http://stackoverflow.com/questions/11532550/atomic-update-select-in-postgres
   (function loop() {
     // logger.debug('Entering watched_users_loop');
     sync_next_watched_user(period, function(err) {

@@ -16,7 +16,7 @@
   "author": "Christopher Brown <io@henrian.com> (http://henrian.com)",
   "dependencies": {
     "async": "*",
-    "bigdecimal": "*",
+    "bignumber.js": "*",
     "loge": "*",
     "optimist": "*",
     "pg": "*",
