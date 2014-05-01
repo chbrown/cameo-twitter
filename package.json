@@ -17,6 +17,7 @@
   "dependencies": {
     "async": "*",
     "bignumber.js": "*",
+    "lodash": "*",
     "loge": "*",
     "optimist": "*",
     "pg": "*",
@@ -24,14 +25,18 @@
     "request": "*",
     "sqlcmd": "*",
     "streaming": "*",
-    "twilight": "*",
-    "underscore": "*"
+    "twilight": "*"
   },
   "devDependencies": {
     "tap": "*"
   },
   "bin": {
-    "cameo-twitter": "bin/cameo-twitter.js"
+    "cameo-twitter": "bin/cameo-twitter"
   },
-  "scripts": {}
+  "scripts": {
+    "postinstall": "bin/cameo-twitter install"
+  },
+  "config": {
+    "database": "cameo-twitter"
+  }
 }

@@ -39,7 +39,13 @@ else if (argv.version) {
   console.log(require('../package').version);
 }
 else {
-  var commands = require('./cameo-twitter-commands');
+  var commands = {
+    'edges-work': require('./commands/edges-work'),
+    'install': require('./commands/install'),
+    'populate': require('./commands/populate'),
+    'statuses-work': require('./commands/statuses-work'),
+  };
+
   argv = optimist.check(function(argv) {
     if (argv._.length < 1) {
       throw new Error('You must specify a command');

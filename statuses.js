@@ -2,7 +2,7 @@
 var async = require('async');
 var request = require('request');
 var logger = require('loge');
-var _ = require('underscore');
+var _ = require('lodash');
 var twilight = require('twilight');
 var BigNumber = require('bignumber.js');
 

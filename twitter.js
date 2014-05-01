@@ -1,5 +1,5 @@
 /*jslint node: true */
-var _ = require('underscore');
+var _ = require('lodash');
 var async = require('async');
 var logger = require('loge');
 var request = require('request');

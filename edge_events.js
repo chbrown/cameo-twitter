@@ -1,24 +1,26 @@
 /*jslint node: true */
+var _ = require('lodash');
 var async = require('async');
 var request = require('request');
 var logger = require('loge');
-var _ = require('underscore');
 var twilight = require('twilight');
 
 var db = require('./db');
 var errors = require('./errors');
 
-var replayHistory = function(rows, key) {
-  var users = {};
-  rows.forEach(function(row) {
-    if (row.type == 'follow') {
-      users[row[key]] = 1;
+
+var replay = function(id_states) {
+  // id_states should be an array of {id: String, state: Boolean} objects
+  var ids = {};
+  id_states.forEach(function(id_state) {
+    if (id_state.state) {
+      ids[id_state.id] = 1;
     }
     else {
-      delete users[row[key]];
+      delete ids[id_state.id];
     }
   });
-  return Object.keys(users);
+  return Object.keys(ids);
 };
 
 var sync_watched_user = function(user_id, started, ended, callback) {
@@ -63,21 +65,24 @@ var sync_watched_user = function(user_id, started, ended, callback) {
     }],
     database_followers: function(callback) {
       db.Select('edge_events')
+      .add('from_id AS id', "type = 'follow' AS state")
       .where('to_id = ?', user_id)
-      .orderBy('ended')
+      .orderBy('ended ASC')
       .execute(callback);
     },
     database_friends: function(callback) {
       db.Select('edge_events')
+      .add('to_id AS id', "type = 'follow' AS state")
       .where('from_id = ?', user_id)
-      .orderBy('ended')
+      .orderBy('ended ASC')
       .execute(callback);
     },
   }, function(err, payload) {
     if (err) return callback(err);
 
-    var database_followers = replayHistory(payload.database_followers, 'from_id');
-    var database_friends = replayHistory(payload.database_friends, 'to_id');
+    // database_followers and database_friends are both lists of user_id's
+    var database_friends = replay(payload.database_friends);
+    var database_followers = replay(payload.database_followers);
 
     var edge_events = [];
     _.difference(payload.friends, database_friends).forEach(function(friend_user_id) {

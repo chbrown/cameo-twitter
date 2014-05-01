@@ -1,17 +1,16 @@
 /*jslint node: true */
-var _ = require('underscore');
+var _ = require('lodash');
 var async = require('async');
-var streaming = require('streaming');
-var fs = require('fs');
-
 var db = require('../db');
-var errors = require('../errors');
+var fs = require('fs');
 var logger = require('loge');
-var twitter = require('../twitter');
-var edge_events = require('../edge_events');
-var statuses = require('../statuses');
-var fork = require('../fork');
-var users = require('../users');
+var streaming = require('streaming');
+
+// var errors = require('../../errors');
+// var twitter = require('../twitter');
+// var edge_events = require('../edge_events');
+var users = require('../../users');
+var statuses = require('../../statuses');
 
 // var stream = require('stream');
 // var util = require('util');
@@ -52,42 +51,7 @@ var getLines = function(args, callback) {
   });
 };
 
-exports.install = function(argv) {
-  db.install(function(err) {
-    if (err) throw err;
-  });
-};
-
-exports['edges-work'] = function(argv) {
-  fork(function(callback) {
-    edge_events.loop(argv.period, callback);
-  }, argv.forks);
-};
-
-exports['edges-add'] = function(argv) {
-  // pop off the command (argv[0])
-  // var args = argv._.slice(1);
-  // var groups = _.groupBy(args, function(user_id_or_screen_name) {
-  //   return isNaN(user_id_or_screen_name) ? 'screen_names' : 'user_ids';
-  // });
-  // twitter.resolveScreenNames(groups.screen_names || [], function(err, resolved_user_ids) {
-  //   if (err) throw err;
-  //   var user_ids = [].concat(resolved_user_ids || [], groups.user_ids || []);
-  //   async.each(user_ids, edge_events.addUser, function(err) {
-  //     if (err) throw err;
-  //     logger.info('Added %d user_ids', user_ids.length);
-  //     process.exit();
-  //   });
-  // });
-};
-
-exports['statuses-work'] = function(argv) {
-  fork(function(callback) {
-    statuses.loop(callback);
-  }, argv.forks);
-};
-
-exports['statuses-add'] = function(argv) {
+module.exports = function(argv) {
   var args = argv._.slice(1);
   // var user_key = argv.field == 'user_id' ? 'id_str' : 'screen_name';
   getLines(args, function(err, lines) {
@@ -106,17 +70,5 @@ exports['statuses-add'] = function(argv) {
         });
       });
     });
-  });
-};
-
-exports.populate = function(argv) {
-  users.sync_missing(function(err) {
-    if (err) {
-      logger.error('populate, sync_missing error:', err);
-      process.exit(1);
-    }
-
-    logger.info('populate done');
-    process.exit();
   });
 };
