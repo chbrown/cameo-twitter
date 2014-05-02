@@ -10,10 +10,11 @@ var twitter = require('./twitter');
 exports.sync_missing = function(callback) {
   // populate half-filled users in the users table
   (function loop() {
-    // db.Select('users').where('screen_name IS NOT NULL AND id_str IS NULL').limit(100)
+    var now = new Date();
+    var cutoff = new Date(now - (365*24*60*60*1000)); // one year ago
     db.Select('users')
     .add('id_str', 'screen_name')
-    .where('modified IS NULL')
+    .where('modified < ?', cutoff)
     .limit(100)
     .execute(function(err, rows) {
       if (err) return callback(err);

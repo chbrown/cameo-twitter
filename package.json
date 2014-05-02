@@ -20,7 +20,6 @@
     "lodash": "*",
     "loge": "*",
     "optimist": "*",
-    "pg": "*",
     "redis": "*",
     "request": "*",
     "sqlcmd": "*",

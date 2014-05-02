@@ -169,7 +169,7 @@ exports.addUser = function(user_id, callback) {
   .set({
     user_id: user_id,
     active: true,
-    modified: new Date(0),
+    // modified: new Date(0),
   })
   .execute(function(err) {
     if (err) {
