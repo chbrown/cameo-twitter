@@ -1,5 +1,12 @@
 -- $ dropdb cameo-twitter; createdb cameo-twitter && psql cameo-twitter < schema.sql
 
+-- thoughts on TIMESTAMP WITH TIME ZONE vs. WITHOUT: both are stored in the
+-- same amount of space; it's just that WITHOUT insists that clients be on the same timezone
+-- WITH TIME ZONE allows clients to tell the server what timezone they're sending over, including
+-- UTC vs. whatever the postgres server thinks the timezone is. It would all be okay, too, if we
+-- could ensure that the client has TZ='UTC' and server has `timezone = UTC`, but that takes a bit
+-- more config.
+
 CREATE EXTENSION citext;
 
 -- PG data types: http://www.postgresql.org/docs/9.3/static/datatype.html
@@ -18,7 +25,7 @@ CREATE TABLE users (
   followers_count                    INT,
   friends_count                      INT,
   listed_count                       INT,
-  created_at                         TIMESTAMP,
+  created_at                         TIMESTAMP WITH TIME ZONE,
   favourites_count                   INT,
   utc_offset                         INT,
   time_zone                          TEXT,
@@ -54,15 +61,15 @@ CREATE TABLE users (
   missing                            BOOLEAN DEFAULT FALSE,
 
   -- modified tracks the last-synced date
-  modified TIMESTAMP,
+  modified TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT 'epoch',
 
   -- "inserted", to differentiate from "created_at"
-  inserted TIMESTAMP NOT NULL DEFAULT current_timestamp
+  inserted TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT current_timestamp
 );
 CREATE INDEX users_id_str ON users(id_str);
 
 CREATE TABLE statuses (
-  created_at                TIMESTAMP,
+  created_at                TIMESTAMP WITH TIME ZONE,
   -- id                        BIGINT,
   id_str                    TEXT PRIMARY KEY,
   text                      TEXT,
@@ -92,7 +99,7 @@ CREATE TABLE statuses (
   filter_level              TEXT,
   lang                      TEXT,
 
-  inserted TIMESTAMP NOT NULL DEFAULT current_timestamp NOT NULL
+  inserted TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT current_timestamp NOT NULL
 );
 
 CREATE TABLE statuses_watched_users (
@@ -103,8 +110,8 @@ CREATE TABLE statuses_watched_users (
 
   backlog_exhausted  BOOLEAN DEFAULT FALSE,
 
-  modified           TIMESTAMP DEFAULT 'epoch',
-  created            TIMESTAMP NOT NULL DEFAULT current_timestamp
+  modified           TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT 'epoch',
+  created            TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT current_timestamp
 );
 
 CREATE TABLE edge_events_watched_users (
@@ -114,9 +121,9 @@ CREATE TABLE edge_events_watched_users (
   active       BOOLEAN DEFAULT TRUE NOT NULL,
 
   -- modified: when last crawled
-  modified     TIMESTAMP DEFAULT 'epoch',
+  modified     TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT 'epoch',
   -- created: default, insertion point
-  created      TIMESTAMP NOT NULL DEFAULT current_timestamp
+  created      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT current_timestamp
 );
 
 CREATE TYPE edge_event_type AS ENUM (
@@ -134,8 +141,8 @@ CREATE TABLE edge_events (
 
   -- when crawling, we'll know the last time we updated, and by what time we
   -- observed the change, but it could have happened anywhere in between.
-  started TIMESTAMP,
-  ended   TIMESTAMP NOT NULL
+  started TIMESTAMP WITH TIME ZONE NOT NULL,
+  ended   TIMESTAMP WITH TIME ZONE NOT NULL
 );
 CREATE INDEX from_to_index ON edge_events(from_id, to_id);
 CREATE INDEX to_from_index ON edge_events(to_id, from_id);
