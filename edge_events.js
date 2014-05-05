@@ -7,6 +7,7 @@ var twilight = require('twilight');
 
 var db = require('./db');
 var errors = require('./errors');
+var twitter = require('./twitter');
 
 
 var replay = function(id_states) {
@@ -24,45 +25,13 @@ var replay = function(id_states) {
 };
 
 var sync_watched_user = function(user_id, started, ended, callback) {
-  // https://dev.twitter.com/docs/api/1.1/get/followers/ids
-  // https://dev.twitter.com/docs/api/1.1/get/friends/ids
-  var twitter_request = request.defaults({
-    method: 'GET',
-    timeout: 10000,
-    json: true,
-    qs: {user_id: user_id, stringify_ids: 'true'},
-  });
-
   async.auto({
-    oauth: function(callback) {
-      twilight.getOAuth('~/.twitter', callback);
+    followers: function(callback) {
+      twitter.getUserFollowers(user_id, callback);
     },
-    followers: ['oauth', function(callback, payload) {
-      twitter_request({
-        url: 'https://api.twitter.com/1.1/followers/ids.json',
-        oauth: payload.oauth,
-      }, function(err, response, body) {
-        if (err) return callback(err);
-
-        if (response.statusCode != 200) {
-          return callback(new errors.HTTPError(response, body));
-        }
-        callback(null, body.ids);
-      });
-    }],
-    friends: ['oauth', function(callback, payload) {
-      twitter_request({
-        url: 'https://api.twitter.com/1.1/friends/ids.json',
-        oauth: payload.oauth,
-      }, function(err, response, body) {
-        if (err) return callback(err);
-
-        if (response.statusCode != 200) {
-          return callback(new errors.HTTPError(response, body));
-        }
-        callback(null, body.ids);
-      });
-    }],
+    friends: function(callback) {
+      twitter.getUserFriends(user_id, callback);
+    },
     database_followers: function(callback) {
       db.Select('edge_events')
       .add('from_id AS id', "type = 'follow' AS state")

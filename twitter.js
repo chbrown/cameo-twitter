@@ -7,43 +7,12 @@ var twilight = require('twilight');
 
 var errors = require('./errors');
 
-// exports.resolveScreenNames = function(screen_names, callback) {
-//   /**
-//   Can only handle 100 screen_names (at a time)
-
-//   callback(Error | null, Array[Number] | null)
-//   */
-//   if (screen_names.length === 0) return callback(null, []);
-
-//   twilight.getOAuth('~/.twitter', function(err, oauth) {
-//     if (err) return callback(err);
-//     request({
-//       method: 'POST',
-//       url: 'https://api.twitter.com/1.1/users/lookup.json',
-//       oauth: oauth,
-//       json: true,
-//       form: {
-//         screen_name: screen_names.join(',')
-//       }
-//     }, function(err, response, body) {
-//       if (err) return callback(err);
-
-//       if (response.statusCode != 200) {
-//         return callback(new errors.HTTPError(response, body));
-//       }
-
-//       var user_ids = body.map(function(user) {
-//         return user.id_str;
-//       });
-//       callback(null, user_ids);
-//     });
-//   });
-// };
-
 exports.getUsers = function(users, callback) {
   /** Get the user objects for a list of user_ids and/or screen_names.
 
   users is a list of {id_str: '18116587'} or {screen_name: 'chbrown'} objects
+
+  This API method can only handle 100 screen_names at a time
 
   callback: function(Error | null, Array[Object] | null)
   */
@@ -97,8 +66,95 @@ exports.getUsers = function(users, callback) {
 
       callback(null, users);
     });
-    // .on('response', function(response) {
-    //   logger.debug('got response', response);
-    // });
+  });
+};
+
+exports.getUserStatuses = function(user_id, max_id, callback) {
+  twilight.getOAuth('~/.twitter', function(err, oauth) {
+    if (err) return callback(err);
+
+    var query = {
+      user_id: user_id,
+      count: 200,
+      trim_user: true,
+      exclude_replies: false,
+      contributor_details: true,
+      include_rts: true,
+    };
+
+    if (max_id !== undefined) {
+      query.max_id = max_id;
+    }
+
+    // options: https://dev.twitter.com/docs/api/1.1/get/statuses/user_timeline
+    request({
+      method: 'GET',
+      url: 'https://api.twitter.com/1.1/statuses/user_timeline.json',
+      oauth: oauth,
+      timeout: 10000,
+      json: true,
+      qs: query,
+    }, function(err, response, body) {
+      if (err) return callback(err);
+
+      if (response.statusCode != 200) {
+        return callback(new errors.HTTPError(response, body));
+      }
+      callback(null, body);
+    });
+  });
+};
+
+exports.getUserFollowers = function(user_id, callback) {
+  // callback: function(Error | null, Array[String])
+  twilight.getOAuth('~/.twitter', function(err, oauth) {
+    if (err) return callback(err);
+
+    request({
+      method: 'GET',
+      // https://dev.twitter.com/docs/api/1.1/get/followers/ids
+      url: 'https://api.twitter.com/1.1/followers/ids.json',
+      oauth: oauth,
+      timeout: 10000,
+      json: true,
+      qs: {
+        user_id: user_id,
+        stringify_ids: 'true',
+      },
+    }, function(err, response, body) {
+      if (err) return callback(err);
+
+      if (response.statusCode != 200) {
+        return callback(new errors.HTTPError(response, body));
+      }
+      callback(null, body.ids);
+    });
+  });
+};
+
+exports.getUserFriends = function(user_id, callback) {
+  // callback: function(Error | null, Array[String])
+  twilight.getOAuth('~/.twitter', function(err, oauth) {
+    if (err) return callback(err);
+
+    request({
+      method: 'GET',
+      // https://dev.twitter.com/docs/api/1.1/get/friends/ids
+      url: 'https://api.twitter.com/1.1/friends/ids.json',
+      oauth: oauth,
+      timeout: 10000,
+      json: true,
+      qs: {
+        user_id: user_id,
+        stringify_ids: 'true',
+      },
+    }, function(err, response, body) {
+      if (err) return callback(err);
+
+      if (response.statusCode != 200) {
+        return callback(new errors.HTTPError(response, body));
+      }
+      callback(null, body.ids);
+    });
   });
 };

@@ -101,6 +101,7 @@ CREATE TABLE statuses (
 
   inserted TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT current_timestamp NOT NULL
 );
+CREATE INDEX statuses_user_id_str ON statuses(user_id_str);
 
 CREATE TABLE statuses_watched_users (
   id                 SERIAL PRIMARY KEY,
