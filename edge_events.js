@@ -117,6 +117,13 @@ var sync_next_watched_user = function(period, callback) {
           .where('id = ?', row.id)
           .execute(callback);
         }
+        else if (err instanceof errors.HTTPError && err.incoming_message.statusCode == 404) {
+          logger.error('deactivating user "%s" due to 404 HTTP response', row.user_id);
+          db.Update('edge_events_watched_users')
+          .set({active: false})
+          .where('id = ?', row.id)
+          .execute(callback);
+        }
         else {
           logger.error('setting modified back to original value for user "%s"', row.user_id);
           db.Update('edge_events_watched_users')
