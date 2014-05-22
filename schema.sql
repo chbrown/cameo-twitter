@@ -147,3 +147,15 @@ CREATE TABLE edge_events (
 );
 CREATE INDEX from_to_index ON edge_events(from_id, to_id);
 CREATE INDEX to_from_index ON edge_events(to_id, from_id);
+
+-- From twark
+-- CREATE TABLE tasks (
+--   id serial PRIMARY KEY,
+--   -- currently, the only supported task is user-crawling
+--   screen_name CITEXT UNIQUE NOT NULL CHECK (screen_name ~* '^[_a-z0-9]{1,15}$'),
+--   last_updated TIMESTAMP,
+--   user_fetched BOOLEAN DEFAULT FALSE,
+--   backlog_exhausted BOOLEAN DEFAULT FALSE,
+--   touched TIMESTAMP NOT NULL DEFAULT current_timestamp,
+--   inserted TIMESTAMP NOT NULL DEFAULT current_timestamp
+-- );
